@@ -11,57 +11,70 @@ pipeline {
         }
         stage('azurelogin') {
             steps {
-                bat 'az login --service-principal -u %MY_CRED_CLIENT_ID% -p %MY_CRED_CLIENT_SECRET% -t %MY_CRED_TENANT_ID%'
+                powershell 'az login --service-principal -u $env:MY_CRED_CLIENT_ID -p $env:MY_CRED_CLIENT_SECRET -t $env:MY_CRED_TENANT_ID'
             }
         }
-        stage('Terraform Init') {
-            steps {
-                bat 'terraform init'
+        stage('Terraform Init'){
+            steps{
+                powershell """
+                    Write-Host "Initialising Terraform"
+                    terraform init
+                """
             }
         }
-        stage('Terraform Validate') {
+        stage('Terraform Validate'){
             steps {
-                bat 'terraform validate'
+                powershell """
+                    Write-Host "validating Terraform Code"
+                    terraform validate
+                """
             }
         }
-        stage('Terraform Plan') {
+        stage('Terraform Plan'){
             steps {
-                withCredentials([[
-                    $class: 'AzureServicePrincipal',
+                withCredentials([azureServicePrincipal(
                     credentialsId: 'azurelogin',
                     subscriptionIdVariable: 'ARM_SUBSCRIPTION_ID',
                     clientIdVariable: 'ARM_CLIENT_ID',
                     clientSecretVariable: 'ARM_CLIENT_SECRET',
                     tenantIdVariable: 'ARM_TENANT_ID'
-                ]]) {
-                    bat 'terraform plan'
+                )]) {
+                    powershell """
+                        Write-Host "Plan Terraform"
+                        terraform plan
+                    """
                 }
             }
         }
-        stage('Terraform Apply') {
+        stage('Terraform apply') {
             steps {
-                withCredentials([[
-                    $class: 'AzureServicePrincipal',
+                withCredentials([azureServicePrincipal(
                     credentialsId: 'azurelogin',
                     subscriptionIdVariable: 'ARM_SUBSCRIPTION_ID',
                     clientIdVariable: 'ARM_CLIENT_ID',
                     clientSecretVariable: 'ARM_CLIENT_SECRET',
-                    tenantIdVariable: 'ARM_TENANT_ID'
-                ]]) {
-                    bat 'terraform apply -lock=false -auto-approve'
+                    tenantIdVariable: 'ARM_TENANT_ID')]){
+                        powershell """
+                            Write-Host "Apply Terraform"
+                            terraform apply -lock=false -auto-approve
+                        """
                 }
             }
         }
     }
+
     post {
         failure {
             echo "Jenkins Build Failed"
         }
+
         success {
             echo "Jenkins Build Success"
         }
+
         always {
             cleanWs()
         }
     }
 }
+        
